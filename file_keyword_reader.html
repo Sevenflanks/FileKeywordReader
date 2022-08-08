@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+
+<head>
+  <!-- Load required Bootstrap and BootstrapVue CSS -->
+  <link type="text/css" rel="stylesheet" href="https://unpkg.com/bootstrap/dist/css/bootstrap.min.css"/>
+  <link type="text/css" rel="stylesheet" href="https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.css"/>
+
+  <!-- Load polyfills to support older browsers -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es2015%2CIntersectionObserver" crossorigin="anonymous"></script>
+
+  <!-- Load Vue followed by BootstrapVue -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+  <script src="https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
+
+  <!-- Load the following for BootstrapVueIcons support -->
+  <script src="https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue-icons.min.js"></script>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <script src="config.js"></script>
+</head>
+
+
+<div id="app">
+  <b-container>
+    <b-row>
+      <b-form>
+        <b-row>
+          <b-form-group label="1. 掃描報告檔案上傳:" label-cols-sm="2">
+            <b-form-file
+                    v-model="files"
+                    multiple
+                    :state="Boolean(files)"
+                    placeholder="Choose a file or drop it here..."
+                    drop-placeholder="Drop file here..."
+            />
+          </b-form-group>
+          <b-form-group label="2. 擷取關鍵字(一行輸入一個):" label-cols-sm="2">
+            <b-form-textarea v-model="keyWords" rows="3"/>
+          </b-form-group>
+        </b-row>
+        <b-row>
+          <b-col>
+            <div>
+              <b-form-group label="3. 選擇來源檔案編碼">
+                <b-form-radio-group
+                        v-model="encoding"
+                        :options="encodingOpts"
+                ></b-form-radio-group>
+              </b-form-group>
+            </div>
+          </b-col>
+          <b-col>
+            <b-button
+                    variant="primary"
+                    @click="loadFile"
+                    :disabled="!hasFile || parsing"
+            >
+              4. 解析
+            </b-button>
+          </b-col>
+        </b-row>
+        <b-row>
+          <p>已完成 {{ parsedFiles }}/{{ files.length }} 個檔案解析, 共 {{ parsedRows }} 行</p>
+        </b-row>
+        <hr/>
+      </b-form>
+    </b-row>
+    <b-row>
+      <b-row v-for="(uploadData, idx) in uploadDataList">
+        <b-col>
+          {{ uploadData.name }}
+        </b-col>
+        <b-col>
+          <code style="white-space: pre;">{{ JSON.stringify(uploadData.parsed, undefined, 2) }}</code>
+        </b-col>
+        <hr/>
+      </b-row>
+    </b-row>
+  </b-container>
+</div>
+
+<script>
+  var app = new Vue({
+    el: '#app',
+    data: {
+      files: [],
+      uploadDataList: [],
+      keyWords: "密碼長度",
+      encoding: "big5",
+      encodingOpts: ["big5", "utf-8"],
+      showingData: {},
+      showFullText: false,
+      parsing: false,
+      parsedFiles: 0,
+      parsedRows: 0,
+    },
+    mounted() {
+      this.readConfig();
+    },
+    methods: {
+      show(idx) {
+        this.showingData = this.uploadDataList[idx];
+      },
+      loadFile() {
+        this.parsing = true;
+        this.parsedFiles = 0;
+        this.parsedRows = 0;
+        this.uploadDataList = [];
+        const textDecoder = new TextDecoder(this.encoding);
+        this.files.forEach(file => {
+          const reader = new FileReader();
+          reader.onload = (e) => this.readFile(e, reader, textDecoder);
+          reader.fileName = file.name;
+          reader.readAsArrayBuffer(this.files[0]);
+        })
+        this.parsing = false;
+      },
+      readFile(e, reader, textDecoder) {
+        let uploadData;
+        try {
+          uploadData = textDecoder.decode(reader.result);
+        } catch (e) {
+          console.log("解析上傳檔案失敗", e);
+          alert("解析上傳檔案失敗");
+          return;
+        }
+        const parsedData = this.parseData(uploadData);
+        this.uploadDataList.push({
+          name: e.target.fileName.replace(".txt", ""),
+          data: uploadData,
+          parsed: parsedData
+        });
+        this.parsedFiles++;
+        this.$forceUpdate();
+      },
+      parseData(text) {
+        const lines = text.split('\n');
+        const data = {};
+        for (let line of lines) {
+          for (let keyWord of this.keyWordList) {
+            if (line.includes(keyWord)) {
+              if (data[keyWord]) {
+                data[keyWord].push(line.trim());
+              } else {
+                data[keyWord] = [line.trim()];
+              }
+            }
+          }
+          this.parsedRows++;
+        }
+        return data;
+      },
+      readConfig() {
+        if (config) {
+          this.keyWords = config;
+        }
+      }
+    },
+    computed: {
+      hasFile() {
+        return this.files && this.files.length > 0;
+      },
+      keyWordList() {
+        return this.keyWords.split("\n").filter(t => t);
+      }
+    },
+  })
+</script>
+
+<style>
+  @import url(https://fonts.googleapis.com/earlyaccess/notosanstc.css);
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif !important;
+  }
+
+  .col-form-label {
+    color: dodgerblue;
+  }
+</style>
+
+</html>
